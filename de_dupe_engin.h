@@ -33,26 +33,27 @@
 #define DEDUPE_NOMEM		-103
 
 struct dedupe_submeta {
-	char	filename[64];
-	int	offset;
+	char		filename[48];
+	unsigned long	offset;
 };
 
 struct dedupe_footprint {
-	char			data_buf[256];
-	short			data_len;
-	unsigned int		data_cksum;
+	char			data_buf[131072];
+	int			data_len;
+	char			data_cksum[32];
 	int			ref_count;
 	int			dedupe_offset;
-	struct dedupe_submeta	sub_meta[512];
+	struct dedupe_submeta	sub_meta[32];
 	struct dedupe_footprint	*next;
 };
 
 extern struct dedupe_footprint      *dedupe_hashtable[HASH_SIZE];
-extern int insert_metadata_node(char *, char*, unsigned int, int, short);
+extern int insert_metadata_node(char *, char*, char *, int, int);
 extern unsigned int crc32c(unsigned char *);
-extern int metadata_fd;
+extern FILE *metadata_fp;
 extern int insert_fileobject_inhash(struct dedupe_footprint *);
 extern int restore_dedupe_fromhash(char *, char *);
 extern void dedup_log_msg(const char *);
+extern char *calculate_file_md5(const char *, int);
 
 #endif /* DE_DUPE_ENGIN_H */

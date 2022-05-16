@@ -24,4 +24,4 @@ How to run the project:
 		write a file using dedupe -w option is used for write and -r is used for read/restore.
 
 		#./util_dedupe -w -i filename
-		#./util_dedupe -o -i filename -o filename_restore
+		#./util_dedupe -r -i filename -o filename_restore

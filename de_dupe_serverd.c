@@ -1,6 +1,7 @@
 #include "de_dupe_engin.h"
 
-int log_fd = -1, metadata_fd = -1;
+int log_fd = -1;
+FILE	*metadata_fp = NULL;
 
 struct dedupe_footprint	*dedupe_hashtable[HASH_SIZE];
 
@@ -11,10 +12,10 @@ dedup_log_msg(const char *msg) {
 
 int
 write_dedupe(int argc, char *argv[]) {
-	int		opt = 0, src_fd = -1, file_offset = 0;
-	char		in_filename[64], buff[256];
+	int		opt = 0, src_fd = -1, file_offset = 0, t_count = 0;
+	char		in_filename[64], buff[131072], temp_buf[16384], *str;
 	char		*abs_path = NULL;
-	unsigned int	cksum;
+	char		*cksum;
 	short		ret = 0;
 
 
@@ -29,19 +30,37 @@ write_dedupe(int argc, char *argv[]) {
 	abs_path = realpath(in_filename, NULL);
 	file_offset = 0;
 	ret = 0;
-	while((ret = read(src_fd, buff, sizeof(buff))) > 0) {
-		cksum = crc32c(buff);
-		insert_metadata_node(buff, abs_path, cksum, file_offset, ret);
-		file_offset += ret;
+	t_count = 0;
+	str = buff;
+	while((ret = read(src_fd, temp_buf, sizeof(temp_buf))) > 0) {
+		memcpy(str, temp_buf, ret);
+		str = str + ret;
+		t_count = t_count + ret;
+
+		if (t_count == sizeof(buff)) {
+			cksum = calculate_file_md5(buff, t_count);
+			insert_metadata_node(buff, abs_path, cksum, file_offset, t_count);
+			free(cksum);
+			file_offset += t_count;
+			str = buff;
+			t_count = 0;
+		}
 	}
 
+	if (t_count) {
+		cksum = calculate_file_md5(buff, t_count);
+		insert_metadata_node(buff, abs_path, cksum, file_offset, t_count);
+		free(cksum);
+	}
+
+	close(src_fd);
 	return 0;
 }
 
 int
 restore_dedupe(int argc, char *argv[]) {
 	int		opt = 0, src_fd = -1, file_offset = 0, out_fname = 0;
-	char		in_filename[64], out_filename[64], buff[256], *chrptr = NULL;
+	char		in_filename[64], out_filename[64], buff[131072], *chrptr = NULL;
 	char		*abs_path = NULL, *dir_name, o_filename[64] = {'\0'}, dir_path[64] = {'\0'};
 	unsigned int	cksum;
 	short		ret = 0;
@@ -140,7 +159,11 @@ main(int argc, char *argv[]) {
 		}
 	}
 skip:
-	metadata_fd = open(DEDUP_METADATA_FILE, O_RDWR|O_APPEND|O_CREAT, 0666);
+	metadata_fp = fopen(DEDUP_METADATA_FILE, "w");
+	if (metadata_fp == NULL) {
+		dedup_log_msg("failed to open metadata file\n");
+		return -1;
+	}
 
 	while (1) {
 		len = sizeof(caddr);
@@ -199,6 +222,6 @@ skip:
 	}
 	close(fd);
 	close(log_fd);
-	close(metadata_fd);
+	fclose(metadata_fp);
 	return 0;
 }

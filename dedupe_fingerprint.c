@@ -2,7 +2,24 @@
 #include <stdlib.h>
 #include <string.h>
 #include <openssl/md5.h>
+#include <math.h>
 #include "de_dupe_engin.h"
+
+int hextodc(char *hex){
+	int y = 0;
+	int dec = 0;
+	int x, i;
+	for(i = strlen(hex) - 1 ; i >= 0 ; --i){
+		if(hex[i]>='0'&&hex[i]<='9'){
+			x = hex[i] - '0';
+		}
+		else{
+			x = hex[i] - 'A' + 10;
+		}
+		dec = dec + x * pow(16,y);
+	}
+	return dec;
+}
 
 char
 *calculate_file_md5(const char *data, int datalen) {
@@ -65,19 +82,20 @@ crc32c(unsigned char *message) {
 }
 
 int
-hashcode(unsigned int cksum) {
-	return cksum % HASH_SIZE;
+hashcode(char cksum[]) {
+	int dec = hextodc(cksum);
+	return dec % HASH_SIZE;
 }
 
 struct dedupe_footprint *
-search_dedupe_node(unsigned int cksum) {
+search_dedupe_node(char cksum[]) {
 	struct dedupe_footprint	*tmp =NULL;
 	int			hashIndex = hashcode(cksum);
 
 	if (dedupe_hashtable[hashIndex] !=  NULL) {
 		tmp = dedupe_hashtable[hashIndex];
 		while(tmp != NULL) {
-			if (cksum == tmp->data_cksum) {
+			if (strncmp(cksum, tmp->data_cksum, 32) == 0) {
 				return tmp;
 			}
 			tmp = tmp->next;
@@ -146,7 +164,7 @@ insert_fileobject_inhash(struct dedupe_footprint *obj) {
 
 	strncpy(node->data_buf, obj->data_buf, obj->data_len);
 	node->data_len = obj->data_len;
-	node->data_cksum = obj->data_cksum;
+	strncpy(node->data_cksum, obj->data_cksum, 32);
 	node->ref_count = obj->ref_count;
 	node->dedupe_offset = obj->dedupe_offset;
 	memcpy(node->sub_meta, obj->sub_meta, sizeof(obj->sub_meta));
@@ -166,7 +184,7 @@ insert_fileobject_inhash(struct dedupe_footprint *obj) {
 }
 
 int
-insert_metadata_node(char *buff, char* filename, unsigned int cksum, int file_offset, short data_len) {
+insert_metadata_node(char *buff, char* filename, char *cksum, int file_offset, int data_len) {
 	struct dedupe_footprint		*node = NULL, *search_node = NULL, *tmp = NULL;
 	int				hashIndex = 0, refcnt = 0, dedup_offset = 0;
 
@@ -176,10 +194,10 @@ insert_metadata_node(char *buff, char* filename, unsigned int cksum, int file_of
 		if (node == NULL) {
 			return DEDUPE_NOMEM;
 		}
-		strncpy(node->sub_meta[0].filename, filename, 64);
+		strncpy(node->sub_meta[0].filename, filename, 48);
 		node->sub_meta[0].offset = file_offset;
 		node->ref_count = 1;
-		node->data_cksum = cksum;
+		strncpy(node->data_cksum, cksum, 32);
 		strncpy(node->data_buf, buff, data_len);
 		node->data_len = data_len;
 
@@ -193,16 +211,16 @@ insert_metadata_node(char *buff, char* filename, unsigned int cksum, int file_of
 		} else {
 			dedupe_hashtable[hashIndex] = node;
 		}
-		lseek(metadata_fd, 0, SEEK_END);
-		node->dedupe_offset = lseek(metadata_fd, 0, SEEK_END);
-		write(metadata_fd, node, sizeof (struct dedupe_footprint));
+		fseek(metadata_fp, 0, SEEK_END);
+		node->dedupe_offset = ftell(metadata_fp);
+		fwrite(node, sizeof (struct dedupe_footprint), 1, metadata_fp);
 	} else {
 		refcnt = search_node->ref_count;
 		search_node->sub_meta[refcnt].offset = file_offset;
-		strncpy(search_node->sub_meta[refcnt].filename, filename, 64);
+		strncpy(search_node->sub_meta[refcnt].filename, filename, 48);
 		search_node->ref_count++;
-		lseek(metadata_fd, search_node->dedupe_offset, SEEK_SET);
-		write(metadata_fd, search_node, sizeof (struct dedupe_footprint));
+		fseek(metadata_fp, search_node->dedupe_offset, SEEK_SET);
+		fwrite(search_node, sizeof (struct dedupe_footprint), 1, metadata_fp);
 	}
 
 	return 0;
