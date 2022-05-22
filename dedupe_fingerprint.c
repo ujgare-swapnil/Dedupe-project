@@ -109,6 +109,7 @@ restore_dedupe_fromhash(char *in_file, char *out_file) {
 	struct dedupe_footprint *tmp = NULL, *hold = NULL;
 	int			i = 0, refcount = 0, j = 0, loffset = 0;
 	int			first_flag = 0, sub_index = 0, hold_offset = 0;
+	size_t			ret;
 
 	FILE *fp = fopen(out_file, "w");
 	if (fp == NULL) {
@@ -133,7 +134,8 @@ restore_dedupe_fromhash(char *in_file, char *out_file) {
 					}
 
 					fseek(fp, loffset, SEEK_SET);
-					fwrite(tmp->data_buf, tmp->data_len, 1, fp);
+					ret = fwrite(tmp->data_buf, tmp->data_len, 1, fp);
+					continue;
 				}
 			}
 			tmp = tmp->next;
@@ -162,9 +164,9 @@ insert_fileobject_inhash(struct dedupe_footprint *obj) {
 		return DEDUPE_NOMEM;
 	}
 
-	strncpy(node->data_buf, obj->data_buf, obj->data_len);
+	memcpy(node->data_buf, obj->data_buf, obj->data_len);
 	node->data_len = obj->data_len;
-	strncpy(node->data_cksum, obj->data_cksum, 32);
+	memcpy(node->data_cksum, obj->data_cksum, 32);
 	node->ref_count = obj->ref_count;
 	node->dedupe_offset = obj->dedupe_offset;
 	memcpy(node->sub_meta, obj->sub_meta, sizeof(obj->sub_meta));
@@ -194,11 +196,11 @@ insert_metadata_node(char *buff, char* filename, char *cksum, int file_offset, i
 		if (node == NULL) {
 			return DEDUPE_NOMEM;
 		}
-		strncpy(node->sub_meta[0].filename, filename, 48);
+		memcpy(node->sub_meta[0].filename, filename, 48);
 		node->sub_meta[0].offset = file_offset;
 		node->ref_count = 1;
-		strncpy(node->data_cksum, cksum, 32);
-		strncpy(node->data_buf, buff, data_len);
+		memcpy(node->data_cksum, cksum, 32);
+		memcpy(node->data_buf, buff, data_len);
 		node->data_len = data_len;
 
 		hashIndex = hashcode(cksum);
@@ -217,7 +219,7 @@ insert_metadata_node(char *buff, char* filename, char *cksum, int file_offset, i
 	} else {
 		refcnt = search_node->ref_count;
 		search_node->sub_meta[refcnt].offset = file_offset;
-		strncpy(search_node->sub_meta[refcnt].filename, filename, 48);
+		memcpy(search_node->sub_meta[refcnt].filename, filename, 48);
 		search_node->ref_count++;
 		fseek(metadata_fp, search_node->dedupe_offset, SEEK_SET);
 		fwrite(search_node, sizeof (struct dedupe_footprint), 1, metadata_fp);

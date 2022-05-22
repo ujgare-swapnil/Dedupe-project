@@ -14,7 +14,7 @@ int
 main(int argc, char* argv[]) {
 	int	sockfd, opt, flag_write = 0, flag_read = 0, in_fname = 0, out_fname = 0;
 	char 	in_filename[1024] = {'\0'}, out_filename[1024] = {'\0'}, cmd[1024];
-	char	ret_val[8], hostname[HOST_NAME_MAX + 1], *chrptr = NULL;
+	char	ret_val[8], hostname[HOST_NAME_MAX + 1], *chrptr = NULL, *in_abs_path = NULL;
 
 	if (argc < 4) {
 		usage();
@@ -49,9 +49,11 @@ main(int argc, char* argv[]) {
 		return -1;
 	}
 
+	in_abs_path = realpath(in_filename, NULL);
+
 	if (flag_write == 1) {
 		sprintf(cmd, "%d %d %s",
-			MAGIC, 1, in_filename);
+			MAGIC, 1, in_abs_path);
 	} else if (flag_read == 1) {
 		if (out_fname == 0) {
 			chrptr = strrchr(in_filename, '/');
@@ -64,7 +66,7 @@ main(int argc, char* argv[]) {
 			sprintf(out_filename, "%s_%s", chrptr, "restore");
 		}
 		sprintf(cmd, "%d %d %s %s",
-			MAGIC, 0, in_filename, out_filename);
+			MAGIC, 0, in_abs_path, out_filename);
 	}
 
 	sockfd = socket(AF_INET,SOCK_STREAM, 0);
@@ -105,6 +107,6 @@ main(int argc, char* argv[]) {
 		sleep(1);
 	} 
 	
-	printf("retval from server %d", ret_val);
+	printf("retval from server %d\n", atoi(ret_val));
 	return 0;
 }

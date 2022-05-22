@@ -28,6 +28,7 @@ write_dedupe(int argc, char *argv[]) {
 	}
 
 	abs_path = realpath(in_filename, NULL);
+
 	file_offset = 0;
 	ret = 0;
 	t_count = 0;
@@ -81,13 +82,14 @@ restore_dedupe(int argc, char *argv[]) {
 int
 main(int argc, char *argv[]) {
 	int			fd, len, client_fd, temp, count, ret1 = 0;
-	int			ret = 0, local_fd = -1, byte_count = 0;
+	int			ret = 0, byte_count = 0;
 	struct sockaddr_in	saddr;
 	struct	sockaddr_in	caddr;
 	char 			buffer[BuffSize + 1], *str, ret_val[8]; 
 	char			*args[10];
 	pid_t			pid, sid;
 	struct dedupe_footprint	dedup_object;
+	FILE			*local_fp = NULL;
 
 	pid = fork();
 	if (pid < 0) {
@@ -145,13 +147,13 @@ main(int argc, char *argv[]) {
 	/*
 	 * Read the metadata if it's already exists and fill the hash table accordingly.
 	 */	
-	local_fd = open(DEDUP_METADATA_FILE, O_RDONLY);
-	if (local_fd < 0) {
+	local_fp = fopen(DEDUP_METADATA_FILE, "r");
+	if (local_fp == NULL) {
 		goto skip;
 	}
 	memset(&dedup_object, 0, sizeof(dedup_object));
 	
-	while ((byte_count = read(local_fd, &dedup_object, sizeof(dedup_object))) > 0) {
+	while ((byte_count = fread(&dedup_object, sizeof(dedup_object), 1, local_fp)) > 0) {
 		ret1 = insert_fileobject_inhash(&dedup_object);
 		if (ret1 == DEDUPE_NOMEM) {
 			dedup_log_msg("failed to build hashtable due to insufficent memory\n");
@@ -159,10 +161,13 @@ main(int argc, char *argv[]) {
 		}
 	}
 skip:
-	metadata_fp = fopen(DEDUP_METADATA_FILE, "w");
+	metadata_fp = fopen(DEDUP_METADATA_FILE, "r+");
 	if (metadata_fp == NULL) {
-		dedup_log_msg("failed to open metadata file\n");
-		return -1;
+		metadata_fp = fopen(DEDUP_METADATA_FILE, "w");
+		if (metadata_fp == NULL) {
+			dedup_log_msg("failed to open metadata file\n");
+			return -1;
+		}
 	}
 
 	while (1) {
